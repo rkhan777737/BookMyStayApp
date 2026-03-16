@@ -1,9 +1,7 @@
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 
 /**
- * The Reservation class captures the guest's booking intent.
- * It stores the guest name and the specific room type they desire.
+ * Reservation class captures guest intent.
  */
 class Reservation {
     private String guestName;
@@ -19,31 +17,66 @@ class Reservation {
 }
 
 /**
- * Main application class for Use Case 5.
- * Demonstrates decoupling request intake from actual allocation.
+ * RoomAllocationService manages the transition from Request to Confirmation.
+ */
+class RoomAllocationService {
+    private Map<String, Integer> inventory = new HashMap<>();
+    private Map<String, Set<String>> allocatedRooms = new HashMap<>();
+
+    public void addInventory(String type, int count) {
+        inventory.put(type, count);
+        allocatedRooms.put(type, new HashSet<>());
+    }
+
+    public void processBookings(Queue<Reservation> queue) {
+        System.out.println("Room Allocation Processing");
+
+        while (!queue.isEmpty()) {
+            Reservation request = queue.poll();
+            String type = request.getRoomType();
+            int currentCount = inventory.getOrDefault(type, 0);
+
+            if (currentCount > 0) {
+                // Generate a unique Room ID (e.g., Single-1, Single-2)
+                int roomNumber = allocatedRooms.get(type).size() + 1;
+                String roomID = type + "-" + roomNumber;
+
+                // Set uniqueness check (Defensive Programming)
+                if (allocatedRooms.get(type).add(roomID)) {
+                    // Decrement Inventory (Atomic-like operation)
+                    inventory.put(type, currentCount - 1);
+
+                    System.out.println("Booking confirmed for Guest: " + request.getGuestName() +
+                            ", Room ID: " + roomID);
+                }
+            } else {
+                System.out.println("Booking failed for Guest: " + request.getGuestName() +
+                        " (No " + type + " rooms available)");
+            }
+        }
+    }
+}
+
+/**
+ * Main application class for Use Case 6.
  * @author User
- * @version 5.0
+ * @version 6.0
  */
 public class BookMyStayApp {
     public static void main(String[] args) {
-        // 1. Initialize the Booking Request Queue
-        // We use LinkedList as it implements the Queue interface in Java.
+        // 1. Setup Inventory and Allocation Service
+        RoomAllocationService bookingService = new RoomAllocationService();
+        bookingService.addInventory("Single", 5);
+        bookingService.addInventory("Double", 3);
+        bookingService.addInventory("Suite", 2);
+
+        // 2. Setup Request Queue (FIFO)
         Queue<Reservation> bookingQueue = new LinkedList<>();
-
-        System.out.println("Booking Request Queue\n");
-
-        // 2. Simulating incoming requests (Request Intake)
-        // Requests arrive in a specific order: Abhi -> Subha -> Vanmathi
         bookingQueue.add(new Reservation("Abhi", "Single"));
-        bookingQueue.add(new Reservation("Subha", "Double"));
+        bookingQueue.add(new Reservation("Subha", "Single")); // Requesting same type
         bookingQueue.add(new Reservation("Vanmathi", "Suite"));
 
-        // 3. Processing the Queue (FIFO Principle)
-        // poll() retrieves and removes the head of the queue.
-        while (!bookingQueue.isEmpty()) {
-            Reservation currentRequest = bookingQueue.poll();
-            System.out.println("Processing booking for Guest: " + currentRequest.getGuestName() +
-                    ", Room Type: " + currentRequest.getRoomType());
-        }
+        // 3. Perform Allocation
+        bookingService.processBookings(bookingQueue);
     }
 }
