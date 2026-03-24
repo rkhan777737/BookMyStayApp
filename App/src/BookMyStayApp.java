@@ -1,85 +1,73 @@
+import java.io.*;
 import java.util.*;
 
 /**
- * CLASS - Reservation
- * Represents a confirmed booking.
+ * InventoryData serves as a serializable container for the system state.
+ * Implementing Serializable allows this object to be written to a file.
  */
-class Reservation {
-    private String guestName;
-    private String roomType;
+class InventoryData implements Serializable {
+    private static final long serialVersionUID = 1L;
+    public Map<String, Integer> inventory = new HashMap<>();
 
-    public Reservation(String guestName, String roomType) {
-        this.guestName = guestName;
-        this.roomType = roomType;
-    }
-
-    public String getGuestName() {
-        return guestName;
-    }
-
-    public String getRoomType() {
-        return roomType;
+    public InventoryData() {
+        // Initial state if no file is found
+        inventory.put("Single", 5);
+        inventory.put("Double", 3);
+        inventory.put("Suite", 2);
     }
 }
 
 /**
- * CLASS - BookingHistory
- * Stores confirmed reservations in order.
+ * PersistenceService handles the saving and loading of the InventoryData object.
  */
-class BookingHistory {
+class PersistenceService {
+    private static final String FILE_NAME = "inventory_state.ser";
 
-    private List<Reservation> confirmedReservations;
-
-    public BookingHistory() {
-        confirmedReservations = new ArrayList<>();
+    public void saveState(InventoryData data) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+            oos.writeObject(data);
+            System.out.println("Inventory saved successfully.");
+        } catch (IOException e) {
+            System.err.println("Error saving state: " + e.getMessage());
+        }
     }
 
-    public void addReservation(Reservation reservation) {
-        confirmedReservations.add(reservation);
-    }
+    public InventoryData loadState() {
+        File file = new File(FILE_NAME);
+        if (!file.exists()) {
+            System.out.println("No valid inventory data found. Starting fresh.");
+            return new InventoryData();
+        }
 
-    public List<Reservation> getConfirmedReservations() {
-        return confirmedReservations;
-    }
-}
-
-/**
- * CLASS - BookingReportService
- * Generates reports from booking history.
- */
-class BookingReportService {
-
-    public void generateReport(BookingHistory history) {
-        System.out.println("\nBooking History Report");
-
-        for (Reservation res : history.getConfirmedReservations()) {
-            System.out.println(
-                    "Guest: " + res.getGuestName() +
-                            ", Room Type: " + res.getRoomType()
-            );
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+            return (InventoryData) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Error loading state, starting fresh: " + e.getMessage());
+            return new InventoryData();
         }
     }
 }
 
 /**
- * MAIN CLASS - BookMyStay
+ * Main application class for Use Case 12.
+ * @author User
+ * @version 12.0
  */
 public class BookMyStayApp {
-
     public static void main(String[] args) {
+        System.out.println("System Recovery");
 
-        System.out.println("Booking History and Reporting\n");
+        PersistenceService persistence = new PersistenceService();
 
-        // Initialize history
-        BookingHistory history = new BookingHistory();
+        // 1. Recover state from file or start fresh
+        InventoryData currentData = persistence.loadState();
 
-        // Add confirmed reservations
-        history.addReservation(new Reservation("Abhi", "Single"));
-        history.addReservation(new Reservation("Subha", "Double"));
-        history.addReservation(new Reservation("Vanmathi", "Suite"));
+        // 2. Display current state (Recovered or Initial)
+        System.out.println("\nCurrent Inventory:");
+        currentData.inventory.forEach((type, count) ->
+                System.out.println(type + ": " + count));
 
-        // Generate report
-        BookingReportService reportService = new BookingReportService();
-        reportService.generateReport(history);
+        // 3. Persist state for the next restart
+        persistence.saveState(currentData);
     }
 }
