@@ -1,8 +1,8 @@
 import java.util.*;
+import java.util.concurrent.*;
 
 /**
- * CLASS - Reservation
- * Represents a confirmed booking.
+ * Represents a booking request from a guest.
  */
 class Reservation {
     private String guestName;
@@ -13,73 +13,82 @@ class Reservation {
         this.roomType = roomType;
     }
 
-    public String getGuestName() {
-        return guestName;
-    }
-
-    public String getRoomType() {
-        return roomType;
-    }
+    public String getGuestName() { return guestName; }
+    public String getRoomType() { return roomType; }
 }
 
 /**
- * CLASS - BookingHistory
- * Stores confirmed reservations in order.
+ * Thread-safe Booking Processor using Synchronized blocks.
  */
-class BookingHistory {
+class ConcurrentBookingProcessor {
+    private final Map<String, Integer> inventory = new HashMap<>();
+    private final Map<String, Integer> initialInventory = new HashMap<>();
+    private final Map<String, Set<String>> allocatedRooms = new HashMap<>();
 
-    private List<Reservation> confirmedReservations;
-
-    public BookingHistory() {
-        confirmedReservations = new ArrayList<>();
+    public void addInventory(String type, int count) {
+        inventory.put(type, count);
+        initialInventory.put(type, count);
+        allocatedRooms.put(type, new HashSet<>());
     }
 
-    public void addReservation(Reservation reservation) {
-        confirmedReservations.add(reservation);
-    }
+    /**
+     * Synchronized method ensures that only one thread can process a booking at a time,
+     * preventing race conditions and double-booking.
+     */
+    public synchronized void processBooking(Reservation request) {
+        String type = request.getRoomType();
+        int currentCount = inventory.getOrDefault(type, 0);
 
-    public List<Reservation> getConfirmedReservations() {
-        return confirmedReservations;
-    }
-}
+        if (currentCount > 0) {
+            int roomNumber = initialInventory.get(type) - currentCount + 1;
+            String roomID = type + "-" + roomNumber;
 
-/**
- * CLASS - BookingReportService
- * Generates reports from booking history.
- */
-class BookingReportService {
-
-    public void generateReport(BookingHistory history) {
-        System.out.println("\nBooking History Report");
-
-        for (Reservation res : history.getConfirmedReservations()) {
-            System.out.println(
-                    "Guest: " + res.getGuestName() +
-                            ", Room Type: " + res.getRoomType()
-            );
+            if (allocatedRooms.get(type).add(roomID)) {
+                inventory.put(type, currentCount - 1);
+                System.out.println("Booking confirmed for Guest: " + request.getGuestName() +
+                        ", Room ID: " + roomID);
+            }
         }
     }
+
+    public void displayRemainingInventory() {
+        System.out.println("\nRemaining Inventory:");
+        inventory.forEach((type, count) -> System.out.println(type + ": " + count));
+    }
 }
 
 /**
- * MAIN CLASS - BookMyStay
+ * Main application class for Use Case 11.
+ * @author User
+ * @version 11.0
  */
 public class BookMyStayApp {
+    public static void main(String[] args) throws InterruptedException {
+        ConcurrentBookingProcessor processor = new ConcurrentBookingProcessor();
+        processor.addInventory("Single", 5);
+        processor.addInventory("Double", 3);
+        processor.addInventory("Suite", 2);
 
-    public static void main(String[] args) {
+        System.out.println("Concurrent Booking Simulation");
 
-        System.out.println("Booking History and Reporting\n");
+        // Use a ThreadPool to simulate multiple concurrent guests
+        ExecutorService executor = Executors.newFixedThreadPool(4);
 
-        // Initialize history
-        BookingHistory history = new BookingHistory();
+        List<Reservation> requests = Arrays.asList(
+                new Reservation("Abhi", "Single"),
+                new Reservation("Vanmathi", "Double"),
+                new Reservation("Kural", "Suite"),
+                new Reservation("Subha", "Single")
+        );
 
-        // Add confirmed reservations
-        history.addReservation(new Reservation("Abhi", "Single"));
-        history.addReservation(new Reservation("Subha", "Double"));
-        history.addReservation(new Reservation("Vanmathi", "Suite"));
+        // Submit each booking request as a separate task
+        for (Reservation req : requests) {
+            executor.execute(() -> processor.processBooking(req));
+        }
 
-        // Generate report
-        BookingReportService reportService = new BookingReportService();
-        reportService.generateReport(history);
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+
+        processor.displayRemainingInventory();
     }
 }
